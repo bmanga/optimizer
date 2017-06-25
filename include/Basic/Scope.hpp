@@ -39,31 +39,31 @@ public:
     Scope *closeScope() {
         return mOuterScope;
     }
-
+/* TODO, leave them for now
     type::Compound *makeCompoundType(std::string_view Name, std::vector<Type> Types) {
         return mCompoundTypes.emplace_back(std::make_unique<type::Compound>(Name, std::move(Types)))
             .get();
     }
+*/
 
-    VarDeclNode *makeVarDecl(std::string_view Name, Type Type) {
-        auto *Node = mVarDecls.emplace_back(std::make_unique<VarDeclNode>(this, Name, Type))
-            .get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
+    VarDeclNode *buildVarDecl(std::string_view Name, Type Type) {
+        auto Node = std::make_unique<VarDeclNode>(this, Name, Type);
+
+
+        auto *PNode = mVarDecls.emplace_back(Node.get());
+
+        mCompoundStmt.addStmt(std::move(Node));
+        
+        return PNode;
     }
 
-    VarDeclRefNode *makeRef(VarDeclNode *Var) {
-    auto &Variant = mNodes.emplace_back(std::make_unique<VarDeclRefNode>(this, Var));
-        auto *Node = std::get_if<std::unique_ptr<VarDeclRefNode>>(&Variant)->get();
-        return Node;
+    ptr<VarDeclRefNode> makeRef(VarDeclNode *Var) {
+        return std::make_unique<VarDeclRefNode>(this, Var);
     }
 
     template <class TConstant>
-    ConstantNode *makeConstant(std::string_view Name, TConstant Constant) {
-        auto *Node = mConstants.emplace_back(std::make_unique<ConstantNode>(this, Name, Constant))
-            .get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
+    ptr<ConstantNode> makeConstant(TConstant Constant) {
+        return std::make_unique<ConstantNode>(this, Constant);
     }
 /*
     std::pair<CompoundStmtNode *, Scope> makeCompoundStmt(Scope *S) {
@@ -74,18 +74,21 @@ public:
     }
     */
 
-    FnNode *makeFunctionDecl(std::string_view Name, Type RetType, std::vector<Type> ParmTypes, CompoundStmtNode *FnBody) {
+    FnNode *buildFunctionDecl(std::string_view Name, Type RetType, std::vector<Type> ParmTypes, ptr<CompoundStmtNode> FnBody) {
         type::Function FnType {RetType, std::move(ParmTypes)};
-        auto *Node = mFunctions.emplace_back(std::make_unique<FnNode>(this, Name, FnType, FnBody))
-            .get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
+        auto Node = std::make_unique<FnNode>(this, Name, FnType, std::move(FnBody));
+        auto *PNode = Node.get();
+
+        mFunctions.push_back(PNode);
+
+        mCompoundStmt.addStmt(std::move(Node));
+        return PNode;
     }
 
     FnNode *getFunction(std::string_view Name) {
-        for (const auto &Fn : mFunctions) {
+        for (auto *Fn : mFunctions) {
             if (Name == Fn->getName()) {
-                return Fn.get();
+                return Fn;
             }
         }
         return nullptr;
@@ -96,31 +99,22 @@ public:
         if (!Fn) {
             return nullptr;
         }
-        auto *Node = mFnCalls.emplace_back(std::make_unique<CallNode>(this, Fn, std::move(CallArgs)))
-            .get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
+        auto Node = std::make_unique<CallNode>(this, Fn, std::move(CallArgs));
+        
+        auto *PNode = Node.get();
+        mCompoundStmt.addStmt(std::move(Node));
+        return PNode;
     }
 
-    template <class TConstant>
-    ConstantNode *constant(TConstant Constant) {
-        auto *Node = mConstants.emplace_back(std::make_unique<ConstantNode>(this, "", Constant))
-            .get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
+    AssignNode *buildAssign(ptr<VarDeclRefNode> Lhs, AssignNode::AssignExpr Rhs) {
+        auto Node = std::make_unique<AssignNode>(this, std::move(Lhs), std::move(Rhs));
+        auto *PNode = Node.get();
+        mCompoundStmt.addStmt(std::move(Node));
+        return PNode;
     }
 
-    AssignNode *assign(VarDeclRefNode *Lhs, AssignNode::AssignExpr Rhs) {
-        auto &Var = mNodes.emplace_back(std::make_unique<AssignNode>(this, Lhs, Rhs));
-        auto *Node = std::get_if<std::unique_ptr<AssignNode>>(&Var)->get();
-        mCompoundStmt.addStmt(Node);
-        return Node;
-    }
-
-    RelOpNode *compare(RelOpId Id, RelOpNode::Op1ExprType Lhs, RelOpNode::Op2ExprType Rhs) {
-        auto *Node = mComparisons.emplace_back(std::make_unique<RelOpNode>(this, Id, Lhs, Rhs))
-            .get();
-        return Node;
+    ptr<RelOpNode> makeCompare(RelOpId Id, RelOpNode::Op1ExprType Lhs, RelOpNode::Op2ExprType Rhs) {
+        return std::make_unique<RelOpNode>(this, Id, std::move(Lhs), std::move(Rhs));
     }
 
     Scope *getOuterScope() {
@@ -134,20 +128,21 @@ private:
     ast::CompoundStmtNode mCompoundStmt;
 
     std::vector<std::unique_ptr<Scope>> mInnerScopes;
-    
 
 
-    std::vector<std::unique_ptr<type::Compound>> mCompoundTypes;
-    std::vector<std::unique_ptr<type::Function>> mFunctionTypes;
+//    std::vector<ptr<type::Compound>>> mCompoundTypes;
+//    std::vector<ptr<type::Function>>> mFunctionTypes;
 
-    std::vector<std::unique_ptr<VarDeclNode>> mVarDecls;
-    std::vector<std::unique_ptr<ConstantNode>> mConstants;
-    std::vector<std::unique_ptr<VarDeclRefNode>> mVarRefs;
-    std::vector<std::unique_ptr<FnNode>> mFunctions;
-    std::vector<std::unique_ptr<CallNode>> mFnCalls;
-    std::vector<std::unique_ptr<AssignNode>> mAssignments;
-    std::vector<std::unique_ptr<RelOpNode>> mComparisons;
-    std::vector<std::unique_ptr<CompoundStmtNode>> mCompoundStmts;
+    std::vector<VarDeclNode *> mVarDecls;
+    std::vector<ConstantNode *> mConstants;
+    std::vector<VarDeclRefNode *> mVarRefs;
+    std::vector<FnNode *> mFunctions;
+    std::vector<CallNode *> mFnCalls;
+    std::vector<AssignNode *> mAssignments;
+    std::vector<RelOpNode *> mComparisons;
+    std::vector<CompoundStmtNode *> mCompoundStmts;
+
+
     std::vector<OPNode> mNodes;
 
 

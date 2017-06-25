@@ -147,13 +147,11 @@ public:
     using ConstantValueType = std::variant<int64_t, uint64_t, long double>;
 
     template <class Arith>
-    ConstantNode(Scope * S, std::string_view Name, Arith Val)
+    ConstantNode(Scope * S, Arith Val)
         : NodeBase(S)
-        , mName(Name)
         , mValue{static_cast<impl::ConstTargetType<Arith>>(Val)}
             {}
 private:
-    std::string mName;
     ConstantValueType mValue;
 };
 // $varname : type 
@@ -457,21 +455,17 @@ public:
     CompoundStmtNode(Scope * S)
         : NodeBase(S) {}
 
-    PNode addStmt(PNode Node) {
+    void addStmt(OPNode NewNode) {
         if (!mStatements.empty()) {
-            auto LastNode = mStatements.back();
+            auto &LastNode = mStatements.back();
 
             std::visit(
-                [LastNode](auto *N) {
-                    N->setPrevStmt(LastNode);
-                }, Node);
-
-            std::visit(
-                [Node](auto *N) {
-                    N->setNextStmt(Node);
-                }, LastNode);
+                [&LastNode](auto &UPNew, auto &UPLast) {
+                    UPNew->setPrevStmt(UPLast.get());
+                    UPLast->setNextStmt(UPNew.get());
+                }, NewNode, LastNode);
         }
-        return mStatements.emplace_back(Node);
+        mStatements.emplace_back(std::move(NewNode));
     }
 
     /* FIXME make appropriate iterator iterator
